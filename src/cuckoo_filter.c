@@ -7,23 +7,23 @@ static inline uint32_t murmurhash (const void *, uint32_t, uint32_t);
 static inline uint32_t hash (const void *, uint32_t, uint32_t, uint32_t,
   uint32_t);
 
-typedef struct {
+typedef PACK(struct {
   uint16_t              fingerprint;
-} __attribute__((packed)) cuckoo_nest_t;
+}) cuckoo_nest_t;
 
-typedef struct {
+typedef PACK(struct {
   uint32_t              fingerprint;
   uint32_t              h1;
   uint32_t              h2;
   uint32_t              padding;
-} __attribute__((packed)) cuckoo_item_t;
+}) cuckoo_item_t;
 
 typedef struct {
   bool                  was_found;
   cuckoo_item_t         item;
 } cuckoo_result_t;
 
-struct cuckoo_filter_t {
+PACK(struct cuckoo_filter_t {
   uint32_t              bucket_count;
   uint32_t              nests_per_bucket;
   uint32_t              mask;
@@ -33,7 +33,7 @@ struct cuckoo_filter_t {
   cuckoo_item_t         victim;
   cuckoo_item_t        *last_victim;
   cuckoo_nest_t         bucket[1];
-} __attribute__((packed));
+});
 
 /* ------------------------------------------------------------------------- */
 
@@ -44,10 +44,10 @@ next_power_of_two (size_t x) {
   x |= x >> 2;
   x |= x >> 4;
   x |= x >> 8;
-  x |= x >> 16; 
+  x |= x >> 16;
 
   if (8 == sizeof(size_t)) {
-    x |= x >> 32; 
+    x |= x >> 32;
   }
 
   return ++x;
@@ -108,7 +108,7 @@ cuckoo_filter_move (
 ) {
   uint32_t h2 = ((h1 ^ hash(&fingerprint, sizeof(fingerprint),
     filter->bucket_count, 900, filter->seed)) % filter->bucket_count);
-  
+
   if (CUCKOO_FILTER_OK == add_fingerprint_to_bucket(filter,
     fingerprint, h1)) {
     return CUCKOO_FILTER_OK;
@@ -123,14 +123,14 @@ cuckoo_filter_move (
   if (filter->max_kick_attempts == depth) {
     return CUCKOO_FILTER_FULL;
   }
-  
+
   size_t row = (0 == (rand() % 2) ? h1 : h2);
   size_t col = (rand() % filter->nests_per_bucket);
   size_t elem =
     filter->bucket[(row * filter->nests_per_bucket) + col].fingerprint;
   filter->bucket[(row * filter->nests_per_bucket) + col].fingerprint =
     fingerprint;
-  
+
   return cuckoo_filter_move(filter, elem, row, (depth + 1));
 
 } /* cuckoo_filter_move() */
@@ -166,8 +166,7 @@ cuckoo_filter_new (
   new_filter->bucket_count = bucket_count;
   new_filter->nests_per_bucket = CUCKOO_NESTS_PER_BUCKET;
   new_filter->max_kick_attempts = max_kick_attempts;
-  new_filter->seed = (size_t) time(NULL);
-  //new_filter->seed = (size_t) 10301212;
+  new_filter->seed = (size_t) seed;
   new_filter->mask = (uint32_t) ((1U << (sizeof(cuckoo_nest_t) * 8)) - 1);
 
   *filter = new_filter;
@@ -190,6 +189,23 @@ cuckoo_filter_free (
 
 /* ------------------------------------------------------------------------- */
 
+void
+cuckoo_filter_hash (
+  cuckoo_filter_t      *filter,
+  void                 *key,
+  size_t                key_length_in_bytes,
+  uint32_t             *fingerprint,
+  uint32_t             *h1
+) {
+  *fingerprint = hash(key, key_length_in_bytes, filter->bucket_count,
+    1000, filter->seed);
+  *h1 = hash(key, key_length_in_bytes, filter->bucket_count, 0,
+    filter->seed);
+  return;
+} /* cuckoo_filter_hash() */
+
+/* ------------------------------------------------------------------------- */
+
 static inline CUCKOO_FILTER_RETURN
 cuckoo_filter_lookup (
   cuckoo_filter_t      *filter,
@@ -201,6 +217,16 @@ cuckoo_filter_lookup (
     1000, filter->seed);
   uint32_t h1 = hash(key, key_length_in_bytes, filter->bucket_count, 0,
     filter->seed);
+  return cuckoo_filter_lookup_hash(filter, result, fingerprint, h1);
+} /* cuckoo_filter_lookup() */
+
+static inline CUCKOO_FILTER_RETURN
+cuckoo_filter_lookup_hash (
+  cuckoo_filter_t      *filter,
+  cuckoo_result_t      *result,
+  uint32_t             fingerprint,
+  uint32_t             h1
+) {
   fingerprint &= filter->mask; fingerprint += !fingerprint;
   uint32_t h2 = ((h1 ^ hash(&fingerprint, sizeof(fingerprint),
     filter->bucket_count, 900, filter->seed)) % filter->bucket_count);
@@ -231,11 +257,11 @@ cuckoo_filter_lookup (
   result->item.fingerprint = fingerprint;
   result->item.h1 = h1;
   result->item.h2 = h2;
-            
+
   return ((true == result->was_found)
     ? CUCKOO_FILTER_OK : CUCKOO_FILTER_NOT_FOUND);
 
-} /* cuckoo_filter_lookup() */
+} /* cuckoo_filter_lookup_hash() */
 
 /* ------------------------------------------------------------------------- */
 
@@ -286,7 +312,7 @@ cuckoo_filter_remove (
   }
 
   if ((true == was_deleted) & (NULL != filter->last_victim)) {
-  
+
   }
 
   return ((true == was_deleted) ? CUCKOO_FILTER_OK : CUCKOO_FILTER_NOT_FOUND);
@@ -304,8 +330,18 @@ cuckoo_filter_contains (
   cuckoo_result_t   result;
 
   return cuckoo_filter_lookup(filter, &result, key, key_length_in_bytes);
-
 } /* cuckoo_filter_contains() */
+
+CUCKOO_FILTER_RETURN
+cuckoo_filter_contains_hash (
+  cuckoo_filter_t      *filter,
+  uint32_t             fingerprint,
+  uint32_t             h1
+) {
+  cuckoo_result_t   result;
+
+  return cuckoo_filter_lookup_hash(filter, &result, fingerprint, h1);
+} /* cuckoo_filter_contains_hash() */
 
 /* ------------------------------------------------------------------------- */
 
@@ -379,7 +415,7 @@ hash (
 ) {
   uint32_t h1 = murmurhash(key, key_length_in_bytes, seed);
   uint32_t h2 = murmurhash(key, key_length_in_bytes, h1);
-        
+
   return ((h1 + (n * h2)) % size);
 
 } /* hash() */
