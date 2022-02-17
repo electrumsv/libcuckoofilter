@@ -33,8 +33,8 @@ CUCKOOFILTER_EXPORT
 CUCKOO_FILTER_RETURN
 cuckoo_filter_new (
   cuckoo_filter_t     **filter,
-  size_t                max_key_count,
-  size_t                max_kick_attempts,
+  uint32_t              max_key_count,
+  uint32_t              max_kick_attempts,
   uint32_t              seed
 );
 
@@ -49,7 +49,7 @@ CUCKOO_FILTER_RETURN
 cuckoo_filter_add (
   cuckoo_filter_t      *filter,
   void                 *key,
-  size_t                key_length_in_bytes
+  uint32_t              key_length_in_bytes
 );
 
 CUCKOOFILTER_EXPORT
@@ -57,7 +57,7 @@ CUCKOO_FILTER_RETURN
 cuckoo_filter_remove (
   cuckoo_filter_t      *filter,
   void                 *key,
-  size_t                key_length_in_bytes
+  uint32_t              key_length_in_bytes
 );
 
 CUCKOOFILTER_EXPORT
@@ -65,7 +65,7 @@ CUCKOO_FILTER_RETURN
 cuckoo_filter_contains (
   cuckoo_filter_t      *filter,
   void                 *key,
-  size_t                key_length_in_bytes
+  uint32_t              key_length_in_bytes
 );
 
 CUCKOOFILTER_EXPORT
@@ -81,7 +81,7 @@ void
 cuckoo_filter_hash (
   cuckoo_filter_t      *filter,
   void                 *key,
-  size_t                key_length_in_bytes,
+  uint32_t              key_length_in_bytes,
   uint32_t             *fingerprint,
   uint32_t             *h1
 );

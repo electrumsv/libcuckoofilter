@@ -17,6 +17,10 @@
 #define PY_SSIZE_T_CLEAN
 #include "Python.h"
 
+#ifdef __APPLE__
+#include <malloc/malloc.h>
+#endif
+
 #include "cuckoo_filter.h"
 
 typedef struct {
@@ -38,16 +42,8 @@ bsvcuckoo_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     CuckooFilterObject *self;
     self = (CuckooFilterObject *) type->tp_alloc(type, 0);
-    if (self != NULL) {
-        size_t max_key_count = 500000;
-        size_t max_kick_count = 100;
-        uint32_t seed = 10301212;
-        CUCKOO_FILTER_RETURN result = cuckoo_filter_new(&(self->filter), max_key_count,
-            max_kick_count, seed);
-        if (result != CUCKOO_FILTER_OK) {
-            Py_DECREF(self);
-            return NULL;
-        }
+    if (self) {
+        self->filter = NULL;
     }
     return (PyObject *) self;
 }
@@ -55,28 +51,54 @@ bsvcuckoo_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static int
 bsvcuckoo_init(CuckooFilterObject *self, PyObject *args, PyObject *kwds)
 {
-    // static char *kwlist[] = {"first", "last", "number", NULL};
-    // PyObject *first = NULL, *last = NULL, *tmp;
+    uint32_t max_key_count, max_kick_count;
+    uint32_t seed;
 
-    // if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOi", kwlist,
-    //                                  &first, &last,
-    //                                  &self->number))
-    //     return -1;
+    if (!PyArg_ParseTuple(args, "kkk", &max_key_count, &max_kick_count, &seed))
+        return -1;
 
-    // if (first) {
-    //     tmp = self->first;
-    //     Py_INCREF(first);
-    //     self->first = first;
-    //     Py_XDECREF(tmp);
-    // }
-    // if (last) {
-    //     tmp = self->last;
-    //     Py_INCREF(last);
-    //     self->last = last;
-    //     Py_XDECREF(tmp);
-    // }
+    if (self->filter != NULL) {
+        cuckoo_filter_free(&(self->filter));
+        self->filter = NULL;
+    }
+
+    CUCKOO_FILTER_RETURN result = cuckoo_filter_new(&(self->filter), max_key_count,
+        max_kick_count, seed);
+    if (result != CUCKOO_FILTER_OK) {
+        Py_DECREF(self);
+        PyErr_SetObject(PyExc_Exception, PyUnicode_FromString("Error allocating filter."));
+        return -1;
+    }
     return 0;
 }
+
+static PyObject *
+bsvcuckoo_get_memory_size(CuckooFilterObject *self, void *closure)
+{
+    size_t memory_size = 0;
+    // TODO Linux
+#ifdef _MSC_VER
+    memory_size = _msize(self->filter);
+#elif __APPLE__
+    // TODO MacOS untested
+    memory_size = malloc_size(self->filter);
+#elif __GLIBC__
+    // TODO glibc untested
+    memory_size = malloc_usable_size(self->filter)
+#endif
+    return PyLong_FromLong((long)memory_size);
+}
+
+static PyGetSetDef bsvcuckoo_getsets[] = {
+    {
+        .name       = "memory_size",
+        .get        = (getter) bsvcuckoo_get_memory_size,
+        .set        = NULL,
+        .doc        = NULL,
+        .closure    = NULL
+    },
+    { NULL } /* Sentinel */
+};
 
 // static PyMemberDef bsvcuckoo_members[] = {
 //     // {"first", T_OBJECT_EX, offsetof(CuckooFilterObject, first), 0,
@@ -97,7 +119,7 @@ bsvcuckoo_add(CuckooFilterObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "y#", &key, &key_length))
         return NULL;
 
-    CUCKOO_FILTER_RETURN result = cuckoo_filter_add(self->filter, key, key_length);
+    CUCKOO_FILTER_RETURN result = cuckoo_filter_add(self->filter, key, (uint32_t)key_length);
     return PyLong_FromLong(result);
 }
 
@@ -110,7 +132,7 @@ bsvcuckoo_contains(CuckooFilterObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "y#", &key, &key_length))
         return NULL;
 
-    CUCKOO_FILTER_RETURN result = cuckoo_filter_contains(self->filter, key, key_length);
+    CUCKOO_FILTER_RETURN result = cuckoo_filter_contains(self->filter, key, (uint32_t)key_length);
     return PyLong_FromLong(result);
 }
 
@@ -138,7 +160,7 @@ bsvcuckoo_hash(CuckooFilterObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "y#", &key, &key_length))
         return NULL;
 
-    cuckoo_filter_hash(self->filter, key, key_length, &fingerprint, &h1);
+    cuckoo_filter_hash(self->filter, key, (uint32_t)key_length, &fingerprint, &h1);
 
     PyObject *fingerprint_object = PyLong_FromUnsignedLong(fingerprint);
     if (fingerprint_object == NULL) {
@@ -167,41 +189,59 @@ bsvcuckoo_remove(CuckooFilterObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "y#", &key, &key_length))
         return NULL;
 
-    CUCKOO_FILTER_RETURN result = cuckoo_filter_remove(self->filter, key, key_length);
+    CUCKOO_FILTER_RETURN result = cuckoo_filter_remove(self->filter, key, (uint32_t)key_length);
     return PyLong_FromLong(result);
 }
 
 static PyMethodDef bsvcuckoo_methods[] = {
-    {"add", (PyCFunction) bsvcuckoo_add, METH_VARARGS,
-         "Add an item to the cuckoo filter."
+    {
+        .ml_name  = "add",
+        .ml_meth  = (PyCFunction) bsvcuckoo_add,
+        .ml_flags = METH_VARARGS,
+        .ml_doc   = "Add an item to the cuckoo filter."
     },
-    {"contains", (PyCFunction) bsvcuckoo_contains, METH_VARARGS,
-         "Check if an item is possibly in the cuckoo filter. This can return false positives."
+    {
+        .ml_name  = "contains",
+        .ml_meth  = (PyCFunction) bsvcuckoo_contains,
+        .ml_flags = METH_VARARGS,
+        .ml_doc   = "Check if an item is possibly in the cuckoo filter. This can return false "
+            "positives."
     },
-    {"contains_hash", (PyCFunction) bsvcuckoo_contains_hash, METH_VARARGS,
-         "Check if an item is possibly in the cuckoo filter. This can return false positives."
+    {
+        .ml_name  = "contains_hash",
+        .ml_meth  = (PyCFunction) bsvcuckoo_contains_hash,
+        .ml_flags = METH_VARARGS,
+        .ml_doc   = "Check if an item is possibly in the cuckoo filter. This can return false "
+            "positives."
     },
-    {"hash", (PyCFunction) bsvcuckoo_hash, METH_VARARGS,
-         "Get the hash values for the given item."
+    {
+        .ml_name  = "hash",
+        .ml_meth  = (PyCFunction) bsvcuckoo_hash,
+        .ml_flags = METH_VARARGS,
+        .ml_doc   = "Get the hash values for the given item."
     },
-    {"remove", (PyCFunction) bsvcuckoo_remove, METH_VARARGS,
-         "Remove an item from the cuckoo filter."
+    {
+        .ml_name  = "remove",
+        .ml_meth  = (PyCFunction) bsvcuckoo_remove,
+        .ml_flags = METH_VARARGS,
+        .ml_doc   = "Remove an item from the cuckoo filter."
     },
-    {NULL}  /* Sentinel */
+    { NULL }  /* Sentinel */
 };
 
 static PyTypeObject CuckooFilterType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "bsvcuckoo.CuckooFilter",
-    .tp_doc = "A cuckoo filter instance",
-    .tp_basicsize = sizeof(CuckooFilterObject),
-    .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .tp_new = bsvcuckoo_new,
-    .tp_init = (initproc) bsvcuckoo_init,
-    .tp_dealloc = (destructor) bsvcuckoo_dealloc,
+    .tp_name            = "bsvcuckoo.CuckooFilter",
+    .tp_doc             = "A cuckoo filter instance",
+    .tp_basicsize       = sizeof(CuckooFilterObject),
+    .tp_itemsize        = 0,
+    .tp_flags           = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new             = bsvcuckoo_new,
+    .tp_init            = (initproc) bsvcuckoo_init,
+    .tp_dealloc         = (destructor) bsvcuckoo_dealloc,
     // .tp_members = bsvcuckoo_members,
-    .tp_methods = bsvcuckoo_methods,
+    .tp_methods         = bsvcuckoo_methods,
+    .tp_getset          = bsvcuckoo_getsets,
 };
 
 
@@ -225,11 +265,9 @@ static PyTypeObject CuckooFilterType = {
 
 static struct PyModuleDef bsvcuckoo_module = {
     PyModuleDef_HEAD_INIT,
-    "bsvcuckoo",   /* name of module */
-    NULL, /* module documentation, may be NULL */
-    -1,       /* size of per-interpreter state of the module,
-                 or -1 if the module keeps state in global variables. */
-    NULL // bsvcuckoo_methods
+    .m_name     = "bsvcuckoo",
+    .m_doc      = NULL,
+    .m_size     = -1,
 };
 
 PyMODINIT_FUNC

@@ -1,1 +1,0 @@
-cl -nologo -I.\include -I.\contrib\Python-3.10.2\Include -I.\contrib\Python-3.10.2\PC src\cuckoo_filter.c src\cuckoo_python.c /link /libpath:.\contrib\Python-3.10.2\PCbuild\amd64 -dll -out:bsvcuckoo.pyd

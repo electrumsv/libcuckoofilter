@@ -1,19 +1,42 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
+jobs:
+- job: linux
+  pool: {vmImage: 'Ubuntu-16.04'}
+  steps:
+    - task: UsePythonVersion@0
+    - bash: |
+        set -o errexit
+        python3 -m pip install --upgrade pip
+        pip3 install cibuildwheel==2.3.1
+      displayName: Install dependencies
+    - bash: cibuildwheel --output-dir wheelhouse .
+      displayName: Build wheels
+    - task: PublishBuildArtifacts@1
+      inputs: {pathtoPublish: 'wheelhouse'}
 
-trigger:
-- master
+- job: macos
+  pool: {vmImage: 'macOS-10.15'}
+  steps:
+    - task: UsePythonVersion@0
+    - bash: |
+        set -o errexit
+        python3 -m pip install --upgrade pip
+        python3 -m pip install cibuildwheel==2.3.1
+      displayName: Install dependencies
+    - bash: cibuildwheel --output-dir wheelhouse .
+      displayName: Build wheels
+    - task: PublishBuildArtifacts@1
+      inputs: {pathtoPublish: wheelhouse}
 
-pool:
-  vmImage: ubuntu-latest
-
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
-
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+- job: windows
+  pool: {vmImage: 'vs2017-win2016'}
+  steps:
+    - task: UsePythonVersion@0
+    - bash: |
+        set -o errexit
+        python -m pip install --upgrade pip
+        pip install cibuildwheel==2.3.1
+      displayName: Install dependencies
+    - bash: cibuildwheel --output-dir wheelhouse .
+      displayName: Build wheels
+    - task: PublishBuildArtifacts@1
+      inputs: {pathtoPublish: 'wheelhouse'}
