@@ -80,11 +80,9 @@ bsvcuckoo_get_memory_size(CuckooFilterObject *self, void *closure)
 #ifdef _MSC_VER
     memory_size = _msize(self->filter);
 #elif __APPLE__
-    // TODO MacOS untested
     memory_size = malloc_size(self->filter);
 #elif __GLIBC__
-    // TODO glibc untested
-    memory_size = malloc_usable_size(self->filter)
+    memory_size = malloc_usable_size(self->filter);
 #endif
     return PyLong_FromLong((long)memory_size);
 }

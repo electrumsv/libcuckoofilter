@@ -1,10 +1,13 @@
 from distutils.core import setup, Extension
+import sys
 
 module1 = Extension('bsvcuckoo',
                     define_macros=[('MAJOR_VERSION', '1'),
                                    ('MINOR_VERSION', '0')],
                     include_dirs=['include'],
-                    sources=["src/cuckoo_filter.c", "src/cuckoo_python.c"])
+                    sources=["src/cuckoo_filter.c", "src/cuckoo_python.c"],
+                    # https://cibuildwheel.readthedocs.io/en/stable/faq/#windows-importerror-dll-load-failed-the-specific-module-could-not-be-found
+                    extra_compile_args=['/d2FH4-'] if sys.platform == 'win32' else [])
 
 setup(name='bsvcuckoo',
       version='1.0',
