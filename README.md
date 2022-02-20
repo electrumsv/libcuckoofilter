@@ -32,7 +32,7 @@ The memory used for buckets given the `max_key_count` hint is as shown below:
 | 250000      |  524288     |   524288    |
 | 256000      |  524288     |  1048576    |
 | 500000      | 1048576     |  1048576    |
-| 256000      | 1048576     |  2097152    |
+| 512000      | 1048576     |  2097152    |
 
 It is likely that it is not worth allocating space that will be filled above 95% as the filter
 will be highly occupied and attempting to fit in extra items will fail. Every time the bucket
