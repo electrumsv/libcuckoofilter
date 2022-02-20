@@ -1,3 +1,12 @@
+trigger:
+  batch: yes
+  paths:
+    exclude:
+      - README.md
+      - contrib/scripts
+      - contrib/test-results
+
+
 jobs:
 - job: linux
   pool: {vmImage: 'ubuntu-latest'}

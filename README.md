@@ -15,15 +15,32 @@ multiple cuckoo filters without requiring that it be hashed as part of each look
 Usage notes
 -----------
 
-The effect of `max_kick_attempts` is unclear. Results for amounts of additions to a cuckoo filter
-are the same for values from 0 to 10. It is possible that the primary and secondary hash values
-used for the initial two attempts at placement are sufficient to provide unique placement up
-to a reasonable number of keys which we will never reach.
+The `max_key_count` is a hint to the bucket allocator. All buckets are sized to the next power of
+two above the count. Additionally if the `max_key_count` value is greater than 96% of the bucket
+size, the bucket size is bumped up next power of two again.
 
-A `max_key_count` value of less than perhaps 65536 likely conflicts with the 16-bit item size and
-causes some overlap and an increase in false positives. This can be seen in the false positive
-test results although whether it is worth looking into is unknown. If a small filter is desirable
-then maybe this should result in a recommended minimum filter size.
+The memory used for buckets given the `max_key_count` hint is as shown below:
+
+| Hint        | First size  | Actual size |
+| ----------- | ----------- | ----------- |
+| 1900        |    4096     |     4906    |
+| 2000        |    4096     |     8192    |
+| 60000       |  131072     |   131072    |
+| 65000       |  131072     |   262144    |
+| 120000      |  262144     |   262144    |
+| 128000      |  262144     |   524288    |
+| 250000      |  524288     |   524288    |
+| 256000      |  524288     |  1048576    |
+| 500000      | 1048576     |  1048576    |
+| 256000      | 1048576     |  2097152    |
+
+It is likely that it is not worth allocating space that will be filled above 95% as the filter
+will be highly occupied and attempting to fit in extra items will fail. Every time the bucket
+space doubles the expected number of false positives encountered decreases in that filter,
+although the more occupied a filter becomes the rate of false positives increases. A filter
+double the size of another will have half the rate of false positives when it approaches half
+occupancy and above. At a quarter occupancy, the larger filter will have quarter the rate of
+false positives.
 
 Cuckoo Filter Library
 =====================

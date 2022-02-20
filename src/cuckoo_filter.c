@@ -119,10 +119,11 @@ cuckoo_filter_move (
     return CUCKOO_FILTER_OK;
   }
 
-//printf("depth = %u\n", depth);
   if (filter->max_kick_attempts == depth) {
+    // printf("depth = %u FULL\n", depth);
     return CUCKOO_FILTER_FULL;
   }
+  // printf("depth = %u KICK\n", depth);
 
   uint32_t row = (0 == (rand() % 2) ? h1 : h2);
   uint32_t col = (rand() % filter->nests_per_bucket);

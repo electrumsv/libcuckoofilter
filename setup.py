@@ -8,7 +8,7 @@ module1 = Extension('bsvcuckoo',
                     extra_compile_args=['/d2FH4-'] if sys.platform == 'win32' else [])
 
 setup(name='bsvcuckoo',
-      version='1.01',
+      version='1.02',
       description='A cuckoo filter implementation.',
       author='Roger Taylor',
       author_email='roger.taylor.email@gmail.com',
