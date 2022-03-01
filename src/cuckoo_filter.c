@@ -7,33 +7,10 @@ static inline uint32_t murmurhash (const void *, uint32_t, uint32_t);
 static inline uint32_t hash (const void *, uint32_t, uint32_t, uint32_t,
   uint32_t);
 
-typedef PACK(struct {
-  uint16_t              fingerprint;
-}) cuckoo_nest_t;
-
-typedef PACK(struct {
-  uint32_t              fingerprint;
-  uint32_t              h1;
-  uint32_t              h2;
-  uint32_t              padding;
-}) cuckoo_item_t;
-
 typedef struct {
   bool                  was_found;
   cuckoo_item_t         item;
 } cuckoo_result_t;
-
-PACK(struct cuckoo_filter_t {
-  uint32_t              bucket_count;
-  uint32_t              nests_per_bucket;
-  uint32_t              mask;
-  uint32_t              max_kick_attempts;
-  uint32_t              seed;
-  uint32_t              padding;
-  cuckoo_item_t         victim;
-  cuckoo_item_t        *last_victim;
-  cuckoo_nest_t         bucket[1];
-});
 
 /* ------------------------------------------------------------------------- */
 
@@ -121,6 +98,10 @@ cuckoo_filter_move (
 
   if (filter->max_kick_attempts == depth) {
     // printf("depth = %u FULL\n", depth);
+    filter->victim.fingerprint = fingerprint;
+    filter->victim.h1 = h1;
+    filter->victim.h2 = h2;
+    filter->last_victim = &filter->victim;
     return CUCKOO_FILTER_FULL;
   }
   // printf("depth = %u KICK\n", depth);
@@ -161,7 +142,6 @@ cuckoo_filter_new (
     return CUCKOO_FILTER_ALLOCATION_FAILED;
   }
 
-  /* FIXME Victims are not used. This seems to have been decided against or not completed. */
   new_filter->last_victim = NULL;
   memset(&new_filter->victim, 0, sizeof(new_filter)->victim);
   new_filter->bucket_count = bucket_count;
@@ -200,6 +180,11 @@ cuckoo_filter_lookup_hash (
   fingerprint &= filter->mask; fingerprint += !fingerprint;
   uint32_t h2 = ((h1 ^ hash(&fingerprint, sizeof(fingerprint),
     filter->bucket_count, 900, filter->seed)) % filter->bucket_count);
+
+  if (filter->last_victim != NULL && filter->victim.fingerprint == fingerprint &&
+      (filter->victim.h1 == h1 || filter->victim.h2 == h1)) {
+    return CUCKOO_FILTER_OK;
+  }
 
   result->was_found = false;
   result->item.fingerprint = 0;
@@ -266,9 +251,7 @@ cuckoo_filter_add (
     return CUCKOO_FILTER_FULL;
   }
 
-  return cuckoo_filter_move(filter, result.item.fingerprint, result.item.h1,
-    0);
-
+  return cuckoo_filter_move(filter, result.item.fingerprint, result.item.h1, 0);
 } /* cuckoo_filter_add() */
 
 /* ------------------------------------------------------------------------- */
@@ -293,10 +276,18 @@ cuckoo_filter_remove (
   } else if (CUCKOO_FILTER_OK == remove_fingerprint_from_bucket(filter,
     result.item.fingerprint, result.item.h2)) {
     was_deleted = true;
+  } else if (filter->last_victim != NULL &&
+      filter->victim.fingerprint == result.item.fingerprint &&
+      (filter->victim.h1 == result.item.h1 || filter->victim.h2 == result.item.h1)) {
+    filter->last_victim = NULL;
+    return CUCKOO_FILTER_OK;
   }
 
   if ((true == was_deleted) & (NULL != filter->last_victim)) {
-
+    /* If we clear the victim and try re-adding it either it will succeed or it will become
+       the victim again. */
+    filter->last_victim = NULL;
+    cuckoo_filter_move(filter, filter->victim.fingerprint, filter->victim.h1, 0);
   }
 
   return ((true == was_deleted) ? CUCKOO_FILTER_OK : CUCKOO_FILTER_NOT_FOUND);
@@ -335,10 +326,13 @@ cuckoo_filter_hash (
   void                 *key,
   uint32_t              key_length_in_bytes,
   uint32_t             *fingerprint,
-  uint32_t             *h1
+  uint32_t             *h1,
+  uint32_t             *h2
 ) {
   *fingerprint = hash(key, key_length_in_bytes, filter->bucket_count, 1000, filter->seed);
   *h1 = hash(key, key_length_in_bytes, filter->bucket_count, 0, filter->seed);
+  *h2 = ((*h1 ^ hash(&fingerprint, sizeof(fingerprint), filter->bucket_count, 900,
+    filter->seed)) % filter->bucket_count);
   return;
 } /* cuckoo_filter_hash() */
 

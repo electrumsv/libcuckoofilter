@@ -27,7 +27,30 @@ typedef enum {
   CUCKOO_FILTER_ALLOCATION_FAILED,
 } CUCKOO_FILTER_RETURN;
 
-typedef struct cuckoo_filter_t cuckoo_filter_t;
+typedef PACK(struct {
+  uint16_t              fingerprint;
+}) cuckoo_nest_t;
+
+typedef PACK(struct {
+  uint32_t              fingerprint;
+  uint32_t              h1;
+  uint32_t              h2;
+  uint32_t              padding;
+}) cuckoo_item_t;
+
+typedef PACK(struct cuckoo_filter_t {
+  uint32_t              bucket_count;
+  uint32_t              nests_per_bucket;
+  uint32_t              mask;
+  uint32_t              max_kick_attempts;
+  uint32_t              seed;
+  uint32_t              padding;
+  /* If `last_victim` is non-NULL, this is the last addition (not in the filter proper). */
+  cuckoo_item_t         victim;
+  /* Used to indicate if the filter is "full". */
+  cuckoo_item_t        *last_victim;
+  cuckoo_nest_t         bucket[1];
+}) cuckoo_filter_t;
 
 CUCKOOFILTER_EXPORT
 CUCKOO_FILTER_RETURN
@@ -83,7 +106,8 @@ cuckoo_filter_hash (
   void                 *key,
   uint32_t              key_length_in_bytes,
   uint32_t             *fingerprint,
-  uint32_t             *h1
+  uint32_t             *h1,
+  uint32_t             *h2
 );
 
 #endif /* CUCKOO_FILTER_H */

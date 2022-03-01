@@ -87,10 +87,50 @@ bsvcuckoo_get_memory_size(CuckooFilterObject *self, void *closure)
     return PyLong_FromLong((long)memory_size);
 }
 
+static PyObject *
+bsvcuckoo_get_victim(CuckooFilterObject *self, void *closure)
+{
+    if (self->filter->last_victim == NULL)
+        Py_RETURN_NONE;
+
+    PyObject *fingerprint_object = PyLong_FromUnsignedLong(self->filter->victim.fingerprint);
+    if (fingerprint_object == NULL) {
+        PyErr_SetObject(PyExc_Exception,
+            PyUnicode_FromString("Error allocating 'fingerprint' object."));
+        return NULL;
+    }
+
+    PyObject *h1_object = PyLong_FromUnsignedLong(self->filter->victim.h1);
+    if (h1_object == NULL) {
+        Py_DECREF(fingerprint_object);
+        PyErr_SetObject(PyExc_Exception,
+            PyUnicode_FromString("Error allocating 'h1' object."));
+        return NULL;
+    }
+
+    PyObject *h2_object = PyLong_FromUnsignedLong(self->filter->victim.h2);
+    if (h2_object == NULL) {
+        Py_DECREF(fingerprint_object);
+        Py_DECREF(h1_object);
+        PyErr_SetObject(PyExc_Exception,
+            PyUnicode_FromString("Error allocating 'h1' object."));
+        return NULL;
+    }
+
+    return PyTuple_Pack(3, fingerprint_object, h1_object, h2_object);
+}
+
 static PyGetSetDef bsvcuckoo_getsets[] = {
     {
         .name       = "memory_size",
         .get        = (getter) bsvcuckoo_get_memory_size,
+        .set        = NULL,
+        .doc        = NULL,
+        .closure    = NULL
+    },
+    {
+        .name       = "victim",
+        .get        = (getter) bsvcuckoo_get_victim,
         .set        = NULL,
         .doc        = NULL,
         .closure    = NULL
@@ -152,13 +192,14 @@ bsvcuckoo_hash(CuckooFilterObject *self, PyObject *args)
 {
     uint32_t fingerprint;
     uint32_t h1;
+    uint32_t h2;
     void *key;
     Py_ssize_t key_length;
 
     if (!PyArg_ParseTuple(args, "y#", &key, &key_length))
         return NULL;
 
-    cuckoo_filter_hash(self->filter, key, (uint32_t)key_length, &fingerprint, &h1);
+    cuckoo_filter_hash(self->filter, key, (uint32_t)key_length, &fingerprint, &h1, &h2);
 
     PyObject *fingerprint_object = PyLong_FromUnsignedLong(fingerprint);
     if (fingerprint_object == NULL) {
@@ -175,7 +216,16 @@ bsvcuckoo_hash(CuckooFilterObject *self, PyObject *args)
         return NULL;
     }
 
-    return PyTuple_Pack(2, fingerprint_object, h1_object);
+    PyObject *h2_object = PyLong_FromUnsignedLong(h2);
+    if (h2_object == NULL) {
+        Py_DECREF(fingerprint_object);
+        Py_DECREF(h1_object);
+        PyErr_SetObject(PyExc_Exception,
+            PyUnicode_FromString("Error allocating 'h1' object."));
+        return NULL;
+    }
+
+    return PyTuple_Pack(3, fingerprint_object, h1_object, h2_object);
 }
 
 static PyObject *
