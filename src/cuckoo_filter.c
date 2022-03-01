@@ -271,10 +271,10 @@ cuckoo_filter_remove (
   }
 
   if (CUCKOO_FILTER_OK == remove_fingerprint_from_bucket(filter,
-    result.item.fingerprint, result.item.h1)) {
+      result.item.fingerprint, result.item.h1)) {
     was_deleted = true;
   } else if (CUCKOO_FILTER_OK == remove_fingerprint_from_bucket(filter,
-    result.item.fingerprint, result.item.h2)) {
+      result.item.fingerprint, result.item.h2)) {
     was_deleted = true;
   } else if (filter->last_victim != NULL &&
       filter->victim.fingerprint == result.item.fingerprint &&
