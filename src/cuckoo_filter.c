@@ -161,6 +161,7 @@ cuckoo_filter_new (
     return CUCKOO_FILTER_ALLOCATION_FAILED;
   }
 
+  /* FIXME Victims are not used. This seems to have been decided against or not completed. */
   new_filter->last_victim = NULL;
   memset(&new_filter->victim, 0, sizeof(new_filter)->victim);
   new_filter->bucket_count = bucket_count;

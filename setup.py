@@ -8,7 +8,7 @@ module1 = Extension('bsvcuckoo',
                     extra_compile_args=['/d2FH4-'] if sys.platform == 'win32' else [])
 
 setup(name='bsvcuckoo',
-      version='1.02',
+      version='1.3',
       description='A cuckoo filter implementation.',
       author='Roger Taylor',
       author_email='roger.taylor.email@gmail.com',
@@ -16,4 +16,8 @@ setup(name='bsvcuckoo',
       long_description=open('README.md', 'r').read(),
       long_description_content_type='text/markdown',
       license='MIT Licence',
-      ext_modules=[module1])
+      # This warns about no `__init__.py` file but seems to install workable types.
+      packages=['bsvcuckoo-stubs'],
+      package_data={"bsvcuckoo-stubs": ['__init__.pyi']},
+      # The actual package.
+      ext_modules=[ module1 ])

@@ -1,3 +1,6 @@
 *build*
+dist
 *_export.h
+*.egg-info
 .idea
+.vscode
